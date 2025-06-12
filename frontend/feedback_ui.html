@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP 反馈收集器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .chat-container {
+            display: flex;
+            height: 70vh;
+        }
+
+        .messages-panel {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: #f8fafc;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .message.agent {
+            background: #e0e7ff;
+            border-left: 4px solid #4f46e5;
+        }
+
+        .message.user {
+            background: #dcfce7;
+            border-left: 4px solid #22c55e;
+            margin-left: 40px;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .message-header .icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 8px;
+            border-radius: 50%;
+        }
+
+        .agent-icon {
+            background: #4f46e5;
+        }
+
+        .user-icon {
+            background: #22c55e;
+        }
+
+        .message-content {
+            line-height: 1.6;
+            color: #1f2937;
+        }
+
+        .message-content h1, .message-content h2, .message-content h3 {
+            margin: 16px 0 8px 0;
+            color: #111827;
+        }
+
+        .message-content pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .message-content code {
+            background: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .input-panel {
+            width: 400px;
+            background: white;
+            border-left: 1px solid #e5e7eb;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .input-section {
+            margin-bottom: 20px;
+        }
+
+        .input-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .text-input {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-upload input[type=file] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-upload-label {
+            display: block;
+            padding: 12px;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #6b7280;
+        }
+
+        .file-upload-label:hover {
+            border-color: #4f46e5;
+            background: #f8fafc;
+        }
+
+        .file-list {
+            margin-top: 10px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+
+        .file-item span {
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .file-remove {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .image-preview {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .status.success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .status.error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .status.info {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .input-panel {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #e5e7eb;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 MCP 反馈收集器</h1>
+            <p>智能助手与用户的实时交互平台</p>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages-panel" id="messagesPanel">
+                <div class="message agent">
+                    <div class="message-header">
+                        <div class="icon agent-icon"></div>
+                        <span>AI 助手</span>
+                    </div>
+                    <div class="message-content" id="agentMessage">
+                        <p>正在等待任务信息...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-panel">
+                <div class="input-section">
+                    <label for="feedbackText">📝 您的反馈</label>
+                    <textarea 
+                        id="feedbackText" 
+                        class="text-input" 
+                        placeholder="请输入您的反馈、建议或回答...\n\n支持 Markdown 格式：\n- **粗体文本**\n- *斜体文本*\n- `代码片段`\n- [链接](URL)\n- 列表项"
+                    ></textarea>
+                </div>
+
+                <div class="input-section">
+                    <label>🖼️ 图片上传</label>
+                    <div class="file-upload">
+                        <input type="file" id="imageUpload" accept="image/*" multiple>
+                        <label for="imageUpload" class="file-upload-label">
+                            点击或拖拽上传图片
+                        </label>
+                    </div>
+                    <div id="imageList" class="file-list"></div>
+                </div>
+
+                <div class="input-section">
+                    <label>📎 文件上传</label>
+                    <div class="file-upload">
+                        <input type="file" id="fileUpload" multiple>
+                        <label for="fileUpload" class="file-upload-label">
+                            点击或拖拽上传文件
+                        </label>
+                    </div>
+                    <div id="fileList" class="file-list"></div>
+                </div>
+
+                <button id="submitBtn" class="submit-btn">🚀 提交反馈</button>
+                <div id="status" class="status" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 配置 marked 和 highlight.js
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true,
+            gfm: true
+        });
+
+        // 全局变量
+        let uploadedImages = [];
+        let uploadedFiles = [];
+        let sessionId = null;
+        let ws = null;
+
+        // DOM 元素
+        const messagesPanel = document.getElementById('messagesPanel');
+        const agentMessage = document.getElementById('agentMessage');
+        const feedbackText = document.getElementById('feedbackText');
+        const imageUpload = document.getElementById('imageUpload');
+        const fileUpload = document.getElementById('fileUpload');
+        const imageList = document.getElementById('imageList');
+        const fileList = document.getElementById('fileList');
+        const submitBtn = document.getElementById('submitBtn');
+        const status = document.getElementById('status');
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSession();
+            setupEventListeners();
+        });
+
+        // 初始化会话
+        function initializeSession() {
+            // 从 URL 参数获取会话ID
+            const urlParams = new URLSearchParams(window.location.search);
+            sessionId = urlParams.get('session') || generateSessionId();
+            
+            // 建立 WebSocket 连接
+            connectWebSocket();
+            
+            // 加载初始消息
+            loadInitialMessage();
+        }
+
+        // 生成会话ID
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // 建立 WebSocket 连接
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(`ws://localhost:8001/ws/${sessionId}`);
+                
+                ws.onopen = function() {
+                    showStatus('已连接到服务器', 'success');
+                };
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                };
+                
+                ws.onclose = function() {
+                    showStatus('连接已断开', 'error');
+                };
+                
+                ws.onerror = function() {
+                    showStatus('连接错误', 'error');
+                };
+            } catch (error) {
+                showStatus('无法连接到服务器', 'error');
+            }
+        }
+
+        // 处理 WebSocket 消息
+        function handleWebSocketMessage(data) {
+            if (data.type === 'agent_message') {
+                updateAgentMessage(data.content);
+            } else if (data.type === 'session_complete') {
+                showStatus('会话已完成', 'success');
+                submitBtn.disabled = true;
+            }
+        }
+
+        // 加载初始消息
+        function loadInitialMessage() {
+            // 模拟从服务器获取初始消息
+            const mockMessage = `# 🤖 任务执行中
+
+我正在执行您的任务，遇到了一些需要确认的问题：
+
+## 📋 当前状态
+- ✅ 项目结构分析完成
+- ✅ 依赖关系检查完成
+- ⏳ 代码生成进行中
+
+## ❓ 需要您的反馈
+
+1. **代码风格偏好**：您希望使用哪种代码风格？
+   - 选项A：简洁风格
+   - 选项B：详细注释风格
+
+2. **功能优先级**：以下功能的实现优先级如何排序？
+   - 用户认证
+   - 数据可视化
+   - 性能优化
+
+请在右侧面板中提供您的反馈，支持上传相关图片或文件。`;
+            
+            updateAgentMessage(mockMessage);
+        }
+
+        // 更新助手消息
+        function updateAgentMessage(content) {
+            agentMessage.innerHTML = marked.parse(content);
+            // 高亮代码块
+            agentMessage.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 图片上传
+            imageUpload.addEventListener('change', handleImageUpload);
+            
+            // 文件上传
+            fileUpload.addEventListener('change', handleFileUpload);
+            
+            // 提交按钮
+            submitBtn.addEventListener('click', submitFeedback);
+            
+            // 拖拽上传
+            setupDragAndDrop();
+            
+            // 键盘快捷键
+            feedbackText.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    submitFeedback();
+                }
+            });
+        }
+
+        // 处理图片上传
+        function handleImageUpload(event) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const imageData = {
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            data: e.target.result
+                        };
+                        uploadedImages.push(imageData);
+                        displayImagePreview(imageData);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // 处理文件上传
+        function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const fileData = {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: e.target.result
+                    };
+                    uploadedFiles.push(fileData);
+                    displayFileItem(fileData);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 显示图片预览
+        function displayImagePreview(imageData) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <div>
+                    <span>${imageData.name}</span>
+                    <img src="${imageData.data}" class="image-preview" alt="预览">
+                </div>
+                <button class="file-remove" onclick="removeImage('${imageData.name}')">删除</button>
+            `;
+            imageList.appendChild(item);
+        }
+
+        // 显示文件项
+        function displayFileItem(fileData) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <span>${fileData.name} (${formatFileSize(fileData.size)})</span>
+                <button class="file-remove" onclick="removeFile('${fileData.name}')">删除</button>
+            `;
+            fileList.appendChild(item);
+        }
+
+        // 删除图片
+        function removeImage(fileName) {
+            uploadedImages = uploadedImages.filter(img => img.name !== fileName);
+            refreshImageList();
+        }
+
+        // 删除文件
+        function removeFile(fileName) {
+            uploadedFiles = uploadedFiles.filter(file => file.name !== fileName);
+            refreshFileList();
+        }
+
+        // 刷新图片列表
+        function refreshImageList() {
+            imageList.innerHTML = '';
+            uploadedImages.forEach(displayImagePreview);
+        }
+
+        // 刷新文件列表
+        function refreshFileList() {
+            fileList.innerHTML = '';
+            uploadedFiles.forEach(displayFileItem);
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 设置拖拽上传
+        function setupDragAndDrop() {
+            const uploadAreas = document.querySelectorAll('.file-upload-label');
+            
+            uploadAreas.forEach(area => {
+                area.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#4f46e5';
+                    this.style.background = '#f8fafc';
+                });
+                
+                area.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#d1d5db';
+                    this.style.background = '';
+                });
+                
+                area.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#d1d5db';
+                    this.style.background = '';
+                    
+                    const files = Array.from(e.dataTransfer.files);
+                    if (this.getAttribute('for') === 'imageUpload') {
+                        handleDroppedImages(files);
+                    } else {
+                        handleDroppedFiles(files);
+                    }
+                });
+            });
+        }
+
+        // 处理拖拽的图片
+        function handleDroppedImages(files) {
+            files.filter(file => file.type.startsWith('image/')).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imageData = {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: e.target.result
+                    };
+                    uploadedImages.push(imageData);
+                    displayImagePreview(imageData);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 处理拖拽的文件
+        function handleDroppedFiles(files) {
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const fileData = {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: e.target.result
+                    };
+                    uploadedFiles.push(fileData);
+                    displayFileItem(fileData);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 提交反馈
+        function submitFeedback() {
+            const feedback = feedbackText.value.trim();
+            
+            if (!feedback && uploadedImages.length === 0 && uploadedFiles.length === 0) {
+                showStatus('请输入反馈内容或上传文件', 'error');
+                return;
+            }
+            
+            const feedbackData = {
+                sessionId: sessionId,
+                text: feedback,
+                images: uploadedImages,
+                files: uploadedFiles,
+                timestamp: new Date().toISOString()
+            };
+            
+            // 显示用户消息
+            addUserMessage(feedback, uploadedImages, uploadedFiles);
+            
+            // 发送到服务器
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'user_feedback',
+                    data: feedbackData
+                }));
+                showStatus('反馈已发送', 'success');
+            } else {
+                // 模拟发送成功
+                setTimeout(() => {
+                    showStatus('反馈已发送（模拟模式）', 'info');
+                }, 500);
+            }
+            
+            // 清空输入
+            clearInputs();
+        }
+
+        // 添加用户消息到聊天面板
+        function addUserMessage(text, images, files) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            
+            let content = `
+                <div class="message-header">
+                    <div class="icon user-icon"></div>
+                    <span>您</span>
+                </div>
+                <div class="message-content">
+            `;
+            
+            if (text) {
+                content += marked.parse(text);
+            }
+            
+            if (images.length > 0) {
+                content += '<div style="margin-top: 10px;"><strong>📷 上传的图片：</strong></div>';
+                images.forEach(img => {
+                    content += `<img src="${img.data}" style="max-width: 200px; margin: 5px; border-radius: 4px;" alt="${img.name}">`;
+                });
+            }
+            
+            if (files.length > 0) {
+                content += '<div style="margin-top: 10px;"><strong>📎 上传的文件：</strong></div>';
+                files.forEach(file => {
+                    content += `<div style="margin: 5px 0; padding: 5px; background: #f3f4f6; border-radius: 4px;">${file.name}</div>`;
+                });
+            }
+            
+            content += '</div>';
+            messageDiv.innerHTML = content;
+            
+            messagesPanel.appendChild(messageDiv);
+            messagesPanel.scrollTop = messagesPanel.scrollHeight;
+        }
+
+        // 清空输入
+        function clearInputs() {
+            feedbackText.value = '';
+            uploadedImages = [];
+            uploadedFiles = [];
+            imageList.innerHTML = '';
+            fileList.innerHTML = '';
+            imageUpload.value = '';
+            fileUpload.value = '';
+        }
+
+        // 显示状态消息
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+
+        // 复制图片功能
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName === 'IMG' && e.target.classList.contains('image-preview')) {
+                // 创建临时 canvas 来复制图片
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    canvas.toBlob(function(blob) {
+                        navigator.clipboard.write([
+                            new ClipboardItem({ 'image/png': blob })
+                        ]).then(() => {
+                            showStatus('图片已复制到剪贴板', 'success');
+                        }).catch(() => {
+                            showStatus('复制失败', 'error');
+                        });
+                    });
+                };
+                
+                img.src = e.target.src;
+            }
+        });
+    </script>
+</body>
+</html>

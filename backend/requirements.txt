@@ -1,0 +1,20 @@
+# MCP反馈收集器依赖包
+
+# FastMCP - 现代化的MCP框架
+fastmcp>=2.0.0
+
+# FastAPI - 现代化的Web框架
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# WebSocket支持
+websockets>=12.0
+
+# 数据验证
+pydantic>=2.0.0
+
+# 异步支持
+aiofiles>=23.0.0
+
+# 日志和工具
+typing-extensions>=4.0.0
