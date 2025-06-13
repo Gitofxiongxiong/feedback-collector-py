@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FastMCP集成启动脚本
-同时启动HTTP服务器（用于Web界面）和FastMCP服务器
+合并的MCP+FastAPI服务器启动脚本
+启动集成的服务器，支持MCP协议和Web界面
 """
 
 import asyncio
@@ -19,21 +19,51 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class ServerManager:
-    """服务器管理器"""
-    
+    """合并服务器管理器"""
+
     def __init__(self):
-        self.http_process = None
-        self.mcp_process = None
+        self.server_process = None
         self.running = False
     
-    async def start_fastapi_server(self):
-        """启动FastAPI服务器"""
+    async def build_frontend_if_needed(self):
+        """如果需要，构建前端"""
         try:
-            logger.info("启动FastAPI服务器...")
+            frontend_dir = Path(__file__).parent.parent / "frontend"
+            build_dir = frontend_dir / "build"
+
+            if not build_dir.exists():
+                logger.info("前端未构建，开始构建...")
+                # 运行构建脚本
+                build_script = Path(__file__).parent / "build_and_test.py"
+                result = subprocess.run(
+                    [sys.executable, str(build_script)],
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    logger.info("✅ 前端构建成功")
+                    return True
+                else:
+                    logger.error(f"❌ 前端构建失败: {result.stderr}")
+                    return False
+            else:
+                logger.info("✅ 前端已构建")
+                return True
+
+        except Exception as e:
+            logger.error(f"构建前端时出错: {e}")
+            return False
+    
+    async def start_combined_server(self):
+        """启动合并的服务器"""
+        try:
+            logger.info("启动合并的MCP+FastAPI服务器...")
             backend_dir = Path(__file__).parent.parent / "backend"
-            fastapi_script = backend_dir / "fastapi_server.py"
-            self.http_process = subprocess.Popen(
-                [sys.executable, str(fastapi_script)],
+            server_script = backend_dir / "mcp_server_fastmcp.py"
+
+            self.server_process = subprocess.Popen(
+                [sys.executable, str(server_script), "--web-only"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -41,111 +71,65 @@ class ServerManager:
             )
 
             # 等待一下让服务器启动
-            await asyncio.sleep(3)
+            await asyncio.sleep(5)
 
-            if self.http_process.poll() is None:
-                logger.info("FastAPI服务器启动成功")
+            if self.server_process.poll() is None:
+                logger.info("✅ 合并服务器启动成功")
                 return True
             else:
-                stdout, stderr = self.http_process.communicate()
-                logger.error(f"FastAPI服务器启动失败: {stderr}")
+                stdout, stderr = self.server_process.communicate()
+                logger.error(f"❌ 合并服务器启动失败: {stderr}")
                 return False
 
         except Exception as e:
-            logger.error(f"启动FastAPI服务器时出错: {e}")
-            return False
-    
-    async def start_mcp_server(self):
-        """启动FastMCP服务器"""
-        try:
-            logger.info("启动FastMCP服务器...")
-
-            # 添加后端目录到 Python 路径
-            backend_dir = Path(__file__).parent.parent / "backend"
-            sys.path.insert(0, str(backend_dir))
-
-            # 导入并启动WebSocket服务器
-            from mcp_server_fastmcp import start_websocket_server, server_state, cleanup_expired_sessions
-            await start_websocket_server()
-            
-            logger.info(f"WebSocket服务器已启动: ws://{server_state.host}:{server_state.websocket_port}")
-            
-            # 启动清理任务
-            async def cleanup_task():
-                while self.running:
-                    await asyncio.sleep(3600)  # 每小时清理一次
-                    if self.running:
-                        cleaned = cleanup_expired_sessions()
-                        if cleaned > 0:
-                            logger.info(f"清理了 {cleaned} 个过期会话")
-            
-            # 在后台运行清理任务
-            asyncio.create_task(cleanup_task())
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"启动FastMCP服务器时出错: {e}")
+            logger.error(f"启动合并服务器时出错: {e}")
             return False
     
     async def start_all_servers(self):
         """启动所有服务器"""
         self.running = True
 
-        # 启动FastAPI服务器
-        fastapi_ok = await self.start_fastapi_server()
-        if not fastapi_ok:
-            logger.error("FastAPI服务器启动失败，退出")
+        # 构建前端（如果需要）
+        if not await self.build_frontend_if_needed():
+            logger.error("前端构建失败，退出")
             return False
-        
-        # 启动MCP服务器
-        mcp_ok = await self.start_mcp_server()
-        if not mcp_ok:
-            logger.error("FastMCP服务器启动失败，退出")
-            await self.stop_all_servers()
+
+        # 启动合并服务器
+        server_ok = await self.start_combined_server()
+        if not server_ok:
+            logger.error("合并服务器启动失败，退出")
             return False
-        
-        logger.info("所有服务器启动成功!")
+
+        logger.info("✅ 服务器启动成功!")
         logger.info("=" * 50)
         logger.info("服务器信息:")
         logger.info("  FastAPI服务器: http://localhost:8000")
         logger.info("  API文档: http://localhost:8000/docs")
-        logger.info("  WebSocket服务器: ws://localhost:8001")
+        logger.info("  WebSocket端点: ws://localhost:8000/ws/{session_id}")
         logger.info("  反馈界面: http://localhost:8000/feedback_ui.html")
-        logger.info("  FastMCP服务器: stdio (通过 mcp_server_fastmcp.py)")
+        logger.info("  React应用: http://localhost:8000/react")
+        logger.info("  FastMCP服务器: 集成在同一进程中")
         logger.info("=" * 50)
-        
+
         return True
     
     async def stop_all_servers(self):
         """停止所有服务器"""
         self.running = False
-        
+
         logger.info("正在停止服务器...")
-        
-        # 停止FastAPI服务器
-        if self.http_process and self.http_process.poll() is None:
-            self.http_process.terminate()
+
+        # 停止合并服务器
+        if self.server_process and self.server_process.poll() is None:
+            self.server_process.terminate()
             try:
-                self.http_process.wait(timeout=5)
-                logger.info("FastAPI服务器已停止")
+                self.server_process.wait(timeout=5)
+                logger.info("✅ 合并服务器已停止")
             except subprocess.TimeoutExpired:
-                self.http_process.kill()
-                logger.info("FastAPI服务器已强制停止")
-        
-        # 停止WebSocket服务器
-        try:
-            # 确保后端模块在路径中
-            backend_dir = Path(__file__).parent.parent / "backend"
-            if str(backend_dir) not in sys.path:
-                sys.path.insert(0, str(backend_dir))
-            from mcp_server_fastmcp import stop_websocket_server
-            await stop_websocket_server()
-            logger.info("WebSocket服务器已停止")
-        except Exception as e:
-            logger.error(f"停止WebSocket服务器时出错: {e}")
-        
-        logger.info("所有服务器已停止")
+                self.server_process.kill()
+                logger.info("✅ 合并服务器已强制停止")
+
+        logger.info("✅ 所有服务器已停止")
     
     async def run_forever(self):
         """持续运行服务器"""
@@ -157,10 +141,10 @@ class ServerManager:
             # 保持运行
             while self.running:
                 await asyncio.sleep(1)
-                
-                # 检查FastAPI服务器是否还在运行
-                if self.http_process and self.http_process.poll() is not None:
-                    logger.error("FastAPI服务器意外停止")
+
+                # 检查合并服务器是否还在运行
+                if self.server_process and self.server_process.poll() is not None:
+                    logger.error("❌ 合并服务器意外停止")
                     break
                     
         except KeyboardInterrupt:

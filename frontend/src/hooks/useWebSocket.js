@@ -17,7 +17,7 @@ export const useWebSocket = (sessionId) => {
       
       // 使用当前页面的协议来决定 WebSocket 协议
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.hostname}:8001/ws/${sessionId}`;
+      const wsUrl = `${protocol}//${window.location.hostname}:${window.location.port}/ws/${sessionId}`;
       
       ws.current = new WebSocket(wsUrl);
 
